@@ -2,9 +2,11 @@ import os
 import pendulum
 import datetime
 import pandas as pd
-from pandas import DataFrame
 import kaggle
 from tqdm import tqdm
+
+from sqlalchemy import create_engine
+
 
 from airflow.decorators import dag, task
 from airflow.providers.postgres.operators.postgres import PostgresOperator
@@ -13,6 +15,8 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 DATA_PATH = f"{os.getcwd()}/data/"
 os.makedirs(os.path.dirname(DATA_PATH), exist_ok=True)
 
+hook = PostgresHook(postgres_conn_id='pg_conn')
+engine = create_engine(hook.get_uri())
 
 # !!! Problem 1 !!! 
 @dag(
@@ -64,10 +68,10 @@ def process_equities():
             builds a pandas datframe from all the csvs in the created data folder
             loads the dataframe into the SQL table
         """
+
         metadata_df = pd.read_csv(f'{DATA_PATH}/symbols_valid_meta.csv')
         tickers = []
 
-        print("getting tickers")
         for dirname, _, filenames in os.walk(DATA_PATH):
             for filename in tqdm(filenames[1:]): # skip meta data file
                 ticker = filename[:-4] # cut off '.csv' to get the ticker
@@ -78,21 +82,8 @@ def process_equities():
                 ticker_df['Security Name'] = name 
                 tickers.append(ticker_df)
 
-        print("building equities df")
         equities_df = pd.concat(tickers)
-        print(equities_df.head())
-        print(equities_df.shape)
-
-
-        
-        print("building equities df")
-        equities_df = pd.concat(tickers)
-
-        print("loading equities")
-        postgres_hook = PostgresHook(postgres_conn_id="pg_conn")
-        conn = postgres_hook.get_conn()
-        equities_df.to_sql('equities', postgres_hook.get_sqlalchemy_engine(), chunksize=1000)
-        conn.commit()
+        equities_df.to_sql('equities', engine, if_exists='replace', chunksize=1000)
 
     [create_equities_table] >> get_stock_market_data() >> load_stock_market_data()
 

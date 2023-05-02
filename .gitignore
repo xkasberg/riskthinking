@@ -1,4 +1,4 @@
-*.data/
+data/
 /kaggle.json
 
 # Byte-compiled / optimized / DLL files
